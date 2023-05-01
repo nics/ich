@@ -1,18 +1,43 @@
 package ich
 
-// r := New()
-// r.Get("/x/{bar}/eek", http.NotFound)
-// r.Get("(foo)/foo/{bar:[a-z-]+}/*", http.NotFound)
-// r.Route("/nested/{bar}", func(rr chi.Router) {
-// 	if _, ok := rr.(*Mux); ok {
-// 		log.Print("ok it's a mux")
-// 	}
-// 	rr.Get("(bar)/bar/{baz}", http.NotFound)
-// })
-// log.Printf("%+v", r.namedRoutes)
+import (
+	"net/http"
+	"testing"
 
-// u, err := r.URLPath("foo", "bar", "value", "*", "wild/card")
-// if err != nil {
-// 	log.Print(err)
-// }
-// log.Printf("%+v", u)
+	"github.com/go-chi/chi/v5"
+)
+
+func TestPathTo(t *testing.T) {
+	r := New()
+	r.Get("(foo)/foo/{bar:[a-z-]+}/*", http.NotFound)
+	r.Route("/nested/{foo}", func(r chi.Router) {
+		if _, ok := r.(*Mux); !ok {
+			t.Errorf("Expected *ich.Mux but got %T", r)
+		}
+		r.Get("(bar)/bar/{baz}", http.NotFound)
+	})
+
+	tests := []struct {
+		name string
+		args []string
+		path string
+	}{
+		{
+			"foo",
+			[]string{"bar", "value", "*", "wild/card"},
+			"/foo/value/wild/card",
+		},
+		{
+			"bar",
+			[]string{"foo", "value1", "baz", "value2"},
+			"/nested/value1/bar/value2",
+		},
+	}
+
+	for _, test := range tests {
+		u := r.PathTo(test.name, test.args...)
+		if u.String() != test.path {
+			t.Errorf("Expected path %s but got %s", test.path, u.String())
+		}
+	}
+}
