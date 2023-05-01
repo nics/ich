@@ -141,7 +141,7 @@ func (m *Mux) Trace(pattern string, h http.HandlerFunc) {
 }
 
 // TODO check if param value matches regex
-func (m *Mux) URLPath(name string, pairs ...string) (*url.URL, error) {
+func (m *Mux) BuildPath(name string, pairs ...string) (*url.URL, error) {
 	route, ok := m.namedRoutes[name]
 	if !ok {
 		return nil, fmt.Errorf("ich: route '%s' not found", name)
@@ -171,8 +171,8 @@ func (m *Mux) URLPath(name string, pairs ...string) (*url.URL, error) {
 	}, nil
 }
 
-func (m *Mux) URLPathX(name string, pairs ...string) *url.URL {
-	u, err := m.URLPath(name, pairs...)
+func (m *Mux) PathTo(name string, pairs ...string) *url.URL {
+	u, err := m.BuildPath(name, pairs...)
 	if err != nil {
 		panic(err)
 	}
