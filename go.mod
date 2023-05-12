@@ -1,4 +1,4 @@
-module github.com/ugent-library/ich
+module github.com/nics/ich
 
 go 1.20
 
