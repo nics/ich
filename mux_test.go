@@ -9,12 +9,12 @@ import (
 
 func TestPathTo(t *testing.T) {
 	r := New()
-	r.Get("(foo)/foo/{bar:[a-z-]+}/*", http.NotFound)
+	r.Get("foo /foo/{bar:[a-z-]+}/*", http.NotFound)
 	r.Route("/nested/{foo}", func(r chi.Router) {
 		if _, ok := r.(*Mux); !ok {
 			t.Errorf("Expected *ich.Mux but got %T", r)
 		}
-		r.Get("(bar)/bar/{baz}", http.NotFound)
+		r.Get("bar /bar/{baz}", http.NotFound)
 	})
 
 	tests := []struct {

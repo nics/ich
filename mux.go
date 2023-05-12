@@ -14,7 +14,7 @@ import (
 // ensure Router implements the chi.Router interface
 var _ chi.Router = (*Mux)(nil)
 
-var namePattern = regexp.MustCompile(`^\([a-zA-Z_-]+\)`)
+var namePattern = regexp.MustCompile(`^[a-zA-Z_-]+ `)
 
 type namedRoute struct {
 	pattern   string
@@ -263,7 +263,7 @@ func extractName(pattern string) (string, string) {
 		return "", pattern
 	}
 
-	name := pattern[1 : match[1]-1]
+	name := pattern[0 : match[1]-1]
 	origPattern := pattern[match[1]:]
 	return name, origPattern
 }
