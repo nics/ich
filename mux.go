@@ -11,11 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// ensure Router implements the chi.Router interface
-var _ chi.Router = (*Mux)(nil)
-
-var namePattern = regexp.MustCompile(`^[a-zA-Z_-]+ `)
-
 type namedRoute struct {
 	pattern   string
 	replacers map[string]*regexp.Regexp
@@ -34,7 +29,7 @@ func New() *Mux {
 	}
 }
 
-func (m *Mux) With(middlewares ...func(http.Handler) http.Handler) chi.Router {
+func (m *Mux) With(middlewares ...func(http.Handler) http.Handler) *Mux {
 	return &Mux{
 		Router:      m.Router.With(middlewares...),
 		prefix:      m.prefix,
@@ -42,7 +37,7 @@ func (m *Mux) With(middlewares ...func(http.Handler) http.Handler) chi.Router {
 	}
 }
 
-func (m *Mux) Group(fn func(r chi.Router)) chi.Router {
+func (m *Mux) Group(fn func(r *Mux)) *Mux {
 	mux := &Mux{
 		Router:      m.Router.With(),
 		prefix:      m.prefix,
@@ -54,7 +49,7 @@ func (m *Mux) Group(fn func(r chi.Router)) chi.Router {
 	return mux
 }
 
-func (m *Mux) Route(pattern string, fn func(r chi.Router)) chi.Router {
+func (m *Mux) Route(pattern string, fn func(r *Mux)) *Mux {
 	mux := New()
 	if fn != nil {
 		fn(mux)
@@ -67,77 +62,121 @@ func (m *Mux) Route(pattern string, fn func(r chi.Router)) chi.Router {
 func (m *Mux) Mount(pattern string, h http.Handler) {
 	if mux, ok := h.(*Mux); ok {
 		m.Router.Mount(pattern, mux.Router)
-		for name, route := range mux.namedRoutes {
-			r := namedRoute{
-				pattern:   concatPrefix(m.prefix.pattern, concatPrefix(pattern, route.pattern)),
+		for name, r := range mux.namedRoutes {
+			rr := namedRoute{
+				pattern:   concatPrefix(m.prefix.pattern, concatPrefix(pattern, r.pattern)),
 				replacers: make(map[string]*regexp.Regexp),
 			}
 			for param, replacer := range m.prefix.replacers {
-				r.replacers[param] = replacer
+				rr.replacers[param] = replacer
 			}
 			for param, replacer := range compileReplacers(pattern) {
-				r.replacers[param] = replacer
+				rr.replacers[param] = replacer
 			}
-			for param, replacer := range route.replacers {
-				r.replacers[param] = replacer
+			for param, replacer := range r.replacers {
+				rr.replacers[param] = replacer
 			}
-			m.namedRoutes[name] = r
+			m.namedRoutes[name] = rr
 		}
 	} else {
 		m.Router.Mount(pattern, h)
 	}
 }
 
-func (m *Mux) Handle(pattern string, h http.Handler) {
-	m.Router.Handle(m.registerRoute(pattern), h)
+type Builder struct {
+	prefix      namedRoute
+	namedRoutes map[string]namedRoute
+	pattern     string
 }
 
-func (m *Mux) HandleFunc(pattern string, h http.HandlerFunc) {
-	m.Router.HandleFunc(m.registerRoute(pattern), h)
+func (n Builder) Name(name string) {
+	if name == "" {
+		return
+	}
+
+	if replacers := compileReplacers(n.pattern); replacers != nil {
+		r := namedRoute{
+			pattern:   concatPrefix(n.prefix.pattern, n.pattern),
+			replacers: replacers,
+		}
+		for param, replacer := range n.prefix.replacers {
+			r.replacers[param] = replacer
+		}
+		n.namedRoutes[name] = r
+	}
 }
 
-func (m *Mux) Method(method, pattern string, h http.Handler) {
-	m.Router.Method(method, m.registerRoute(pattern), h)
+func (m *Mux) builder(pattern string) Builder {
+	return Builder{
+		prefix:      m.prefix,
+		namedRoutes: m.namedRoutes,
+		pattern:     pattern,
+	}
 }
 
-func (m *Mux) MethodFunc(method, pattern string, h http.HandlerFunc) {
-	m.Router.MethodFunc(method, m.registerRoute(pattern), h)
+func (m *Mux) Handle(pattern string, h http.Handler) Builder {
+	m.Router.Handle(pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Connect(pattern string, h http.HandlerFunc) {
-	m.Router.Connect(m.registerRoute(pattern), h)
+func (m *Mux) HandleFunc(pattern string, h http.HandlerFunc) Builder {
+	m.Router.HandleFunc(pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Delete(pattern string, h http.HandlerFunc) {
-	m.Router.Delete(m.registerRoute(pattern), h)
+func (m *Mux) Method(method, pattern string, h http.Handler) Builder {
+	m.Router.Method(method, pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Get(pattern string, h http.HandlerFunc) {
-	m.Router.Get(m.registerRoute(pattern), h)
+func (m *Mux) MethodFunc(method, pattern string, h http.HandlerFunc) Builder {
+	m.Router.MethodFunc(method, pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Head(pattern string, h http.HandlerFunc) {
-	m.Router.Head(m.registerRoute(pattern), h)
+func (m *Mux) Connect(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Connect(pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Options(pattern string, h http.HandlerFunc) {
-	m.Router.Options(m.registerRoute(pattern), h)
+func (m *Mux) Delete(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Delete(pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Patch(pattern string, h http.HandlerFunc) {
-	m.Router.Patch(m.registerRoute(pattern), h)
+func (m *Mux) Get(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Get(pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Post(pattern string, h http.HandlerFunc) {
-	m.Router.Post(m.registerRoute(pattern), h)
+func (m *Mux) Head(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Head(pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Put(pattern string, h http.HandlerFunc) {
-	m.Router.Put(m.registerRoute(pattern), h)
+func (m *Mux) Options(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Options(pattern, h)
+	return m.builder(pattern)
 }
 
-func (m *Mux) Trace(pattern string, h http.HandlerFunc) {
-	m.Router.Trace(m.registerRoute(pattern), h)
+func (m *Mux) Patch(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Patch(pattern, h)
+	return m.builder(pattern)
+}
+
+func (m *Mux) Post(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Post(pattern, h)
+	return m.builder(pattern)
+}
+
+func (m *Mux) Put(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Put(pattern, h)
+	return m.builder(pattern)
+}
+
+func (m *Mux) Trace(pattern string, h http.HandlerFunc) Builder {
+	m.Router.Trace(pattern, h)
+	return m.builder(pattern)
 }
 
 // TODO check if param value matches regex
@@ -177,26 +216,6 @@ func (m *Mux) PathTo(name string, pairs ...string) *url.URL {
 		panic(err)
 	}
 	return u
-}
-
-func (m *Mux) registerRoute(namedPattern string) string {
-	name, pattern := extractName(namedPattern)
-	if name == "" {
-		return pattern
-	}
-
-	if replacers := compileReplacers(namedPattern); replacers != nil {
-		r := namedRoute{
-			pattern:   concatPrefix(m.prefix.pattern, pattern),
-			replacers: replacers,
-		}
-		for param, replacer := range m.prefix.replacers {
-			r.replacers[param] = replacer
-		}
-		m.namedRoutes[name] = r
-	}
-
-	return pattern
 }
 
 func compileReplacers(pattern string) map[string]*regexp.Regexp {
@@ -255,15 +274,4 @@ func concatPrefix(prefix, pattern string) string {
 		prefix += pattern
 	}
 	return prefix
-}
-
-func extractName(pattern string) (string, string) {
-	match := namePattern.FindStringIndex(pattern)
-	if match == nil {
-		return "", pattern
-	}
-
-	name := pattern[0 : match[1]-1]
-	origPattern := pattern[match[1]:]
-	return name, origPattern
 }

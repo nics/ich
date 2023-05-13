@@ -3,18 +3,13 @@ package ich
 import (
 	"net/http"
 	"testing"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func TestPathTo(t *testing.T) {
 	r := New()
-	r.Get("foo /foo/{bar:[a-z-]+}/*", http.NotFound)
-	r.Route("/nested/{foo}", func(r chi.Router) {
-		if _, ok := r.(*Mux); !ok {
-			t.Errorf("Expected *ich.Mux but got %T", r)
-		}
-		r.Get("bar /bar/{baz}", http.NotFound)
+	r.Get("/foo/{bar:[a-z-]+}/*", http.NotFound).Name("foo")
+	r.Route("/nested/{foo}", func(r *Mux) {
+		r.Get("/bar/{baz}", http.NotFound).Name("bar")
 	})
 
 	tests := []struct {
