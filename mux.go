@@ -268,7 +268,7 @@ func compileReplacers(pattern string) map[string]*regexp.Regexp {
 }
 
 func concatPrefix(prefix, pattern string) string {
-	if strings.HasSuffix(pattern, "/") {
+	if len(pattern) > 1 && strings.HasSuffix(pattern, "/") {
 		prefix += pattern[:len(pattern)-1]
 	} else {
 		prefix += pattern

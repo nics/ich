@@ -7,6 +7,7 @@ import (
 
 func TestPathTo(t *testing.T) {
 	r := New()
+	r.Get("/", http.NotFound).Name("home")
 	r.Get("/foo/{bar:[a-z-]+}/*", http.NotFound).Name("foo")
 	r.Route("/nested/{foo}", func(r *Mux) {
 		r.Get("/bar/{baz}", http.NotFound).Name("bar")
@@ -17,6 +18,11 @@ func TestPathTo(t *testing.T) {
 		args []string
 		path string
 	}{
+		{
+			"home",
+			[]string{},
+			"/",
+		},
 		{
 			"foo",
 			[]string{"bar", "value", "*", "wild/card"},
@@ -32,7 +38,7 @@ func TestPathTo(t *testing.T) {
 	for _, test := range tests {
 		u := r.PathTo(test.name, test.args...)
 		if u.String() != test.path {
-			t.Errorf("Expected path %s but got %s", test.path, u.String())
+			t.Errorf("Expected path '%s' but got '%s'", test.path, u.String())
 		}
 	}
 }
