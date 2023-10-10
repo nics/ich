@@ -191,23 +191,35 @@ func (m *Mux) BuildPath(name string, pairs ...string) (*url.URL, error) {
 		return nil, errors.New("ich: number of parameters must be even")
 	}
 
-	if n/2 != len(route.replacers) {
+	pat := route.pattern
+	remaining := len(route.replacers)
+	var q url.Values
+
+	for i := 0; i < n; i += 2 {
+		if replacer := route.replacers[pairs[i]]; replacer != nil {
+			pat = replacer.ReplaceAllString(pat, pairs[i+1])
+			remaining--
+		} else {
+			if q == nil {
+				q = make(url.Values)
+			}
+			q.Add(pairs[i], pairs[i+1])
+		}
+	}
+
+	if remaining > 0 {
 		return nil, errors.New("ich: missing parameters")
 	}
 
-	p := route.pattern
-
-	for i := 0; i < n; i += 2 {
-		replacer := route.replacers[pairs[i]]
-		if replacer == nil {
-			return nil, fmt.Errorf("ich: unknown param '%s'", pairs[i])
-		}
-		p = replacer.ReplaceAllString(p, pairs[i+1])
+	u := &url.URL{
+		Path: pat,
 	}
 
-	return &url.URL{
-		Path: p,
-	}, nil
+	if q != nil {
+		u.RawQuery = q.Encode()
+	}
+
+	return u, nil
 }
 
 func (m *Mux) PathTo(name string, pairs ...string) *url.URL {

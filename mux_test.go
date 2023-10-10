@@ -24,6 +24,11 @@ func TestPathTo(t *testing.T) {
 			"/",
 		},
 		{
+			"home",
+			[]string{"foo", "bar"},
+			"/?foo=bar",
+		},
+		{
 			"foo",
 			[]string{"bar", "value", "*", "wild/card"},
 			"/foo/value/wild/card",
