@@ -197,7 +197,7 @@ func (m *Mux) BuildPath(name string, pairs ...string) (*url.URL, error) {
 
 	for i := 0; i < n; i += 2 {
 		if replacer := route.replacers[pairs[i]]; replacer != nil {
-			pat = replacer.ReplaceAllString(pat, pairs[i+1])
+			pat = replacer.ReplaceAllString(pat, url.PathEscape(pairs[i+1]))
 			remaining--
 		} else {
 			if q == nil {
