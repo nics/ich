@@ -180,39 +180,71 @@ func (m *Mux) Trace(pattern string, h http.HandlerFunc) Builder {
 }
 
 // TODO check if param value matches regex
-func (m *Mux) BuildPath(name string, pairs ...string) (*url.URL, error) {
+func (m *Mux) BuildPath(name string, params ...any) (*url.URL, error) {
 	route, ok := m.namedRoutes[name]
 	if !ok {
 		return nil, fmt.Errorf("ich: route '%s' not found", name)
 	}
 
-	n := len(pairs)
-	if n%2 != 0 {
-		return nil, errors.New("ich: number of parameters must be even")
-	}
-
-	pat := route.pattern
+	pattern := route.pattern
 	remaining := len(route.replacers)
 	var q url.Values
 
-	for i := 0; i < n; i += 2 {
-		if replacer := route.replacers[pairs[i]]; replacer != nil {
-			pat = replacer.ReplaceAllString(pat, pairs[i+1])
-			remaining--
-		} else {
-			if q == nil {
-				q = make(url.Values)
+	for i := 0; i < len(params); i += 1 {
+		switch param := params[i].(type) {
+		case string:
+			if len(params) == i+1 {
+				return nil, errors.New("ich: string path params must be followed by another string")
 			}
-			q.Add(pairs[i], pairs[i+1])
+			i++
+			nextParam, ok := params[i].(string)
+			if !ok {
+				return nil, errors.New("ich: string path params must be followed by another string")
+			}
+			if replacer := route.replacers[param]; replacer != nil {
+				pattern = replacer.ReplaceAllString(pattern, nextParam)
+				remaining--
+			} else {
+				if q == nil {
+					q = make(url.Values)
+				}
+				q.Add(param, nextParam)
+			}
+		case []string:
+			if len(param)%2 != 0 {
+				return nil, errors.New("ich: string path params must be followed by another string")
+			}
+			for j := 0; j < len(param); j += 2 {
+				if replacer := route.replacers[param[j]]; replacer != nil {
+					pattern = replacer.ReplaceAllString(pattern, param[j+1])
+					remaining--
+				} else {
+					if q == nil {
+						q = make(url.Values)
+					}
+					q.Add(param[j], param[j+1])
+				}
+			}
+		case url.Values:
+			for k, vals := range param {
+				if q == nil {
+					q = make(url.Values)
+				}
+				for _, val := range vals {
+					q.Add(k, val)
+				}
+			}
+		default:
+			return nil, errors.New("ich: path params must be string, []string or url.Values")
 		}
 	}
 
 	if remaining > 0 {
-		return nil, errors.New("ich: missing parameters")
+		return nil, errors.New("ich: missing route params")
 	}
 
 	u := &url.URL{
-		Path: pat,
+		Path: pattern,
 	}
 
 	if q != nil {
@@ -222,7 +254,7 @@ func (m *Mux) BuildPath(name string, pairs ...string) (*url.URL, error) {
 	return u, nil
 }
 
-func (m *Mux) PathTo(name string, pairs ...string) *url.URL {
+func (m *Mux) Path(name string, pairs ...any) *url.URL {
 	u, err := m.BuildPath(name, pairs...)
 	if err != nil {
 		panic(err)
