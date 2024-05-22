@@ -68,6 +68,7 @@ func (m *Mux) Mount(pattern string, h http.Handler) {
 		m.Router.Mount(pattern, mux.Router)
 		for name, r := range mux.namedRoutes {
 			rr := namedRoute{
+				method:    r.method,
 				pattern:   concatPrefix(m.prefix.pattern, concatPrefix(pattern, r.pattern)),
 				replacers: make(map[string]*regexp.Regexp),
 			}

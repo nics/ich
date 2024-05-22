@@ -1,7 +1,6 @@
 package ich
 
 import (
-	"log"
 	"net/http"
 	"net/url"
 	"testing"
@@ -13,10 +12,10 @@ func TestBuildPath(t *testing.T) {
 	r.Get("/foo/{bar:[a-z-]+}/*", http.NotFound).Name("foo")
 	r.Route("/nested/{foo}", func(r *Mux) {
 		r.Get("/bar/{baz}", http.NotFound).Name("bar")
-		r.HandleFunc("/any/method", http.NotFound).Name("any")
+		r.Group(func(r *Mux) {
+			r.HandleFunc("/any/method", http.NotFound).Name("any")
+		})
 	})
-
-	log.Printf("route names: %+v", r.routeNames)
 
 	tests := []struct {
 		name string
@@ -61,6 +60,9 @@ func TestBuildPath(t *testing.T) {
 
 	if r.RouteName("GET", "/foo/{bar:[a-z-]+}/*") != "foo" {
 		t.Errorf("Route name %q not found", "foo")
+	}
+	if r.RouteName("GET", "/nested/{foo}/bar/{baz}") != "bar" {
+		t.Errorf("Route name %q not found", "bar")
 	}
 	if r.RouteName("", "/nested/{foo}/any/method") != "any" {
 		t.Errorf("Route name %q not found", "any")
