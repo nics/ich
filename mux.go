@@ -12,6 +12,7 @@ import (
 )
 
 type namedRoute struct {
+	method    string
 	pattern   string
 	replacers map[string]*regexp.Regexp
 }
@@ -20,12 +21,14 @@ type Mux struct {
 	chi.Router
 	prefix      namedRoute
 	namedRoutes map[string]namedRoute
+	routeNames  map[string]string
 }
 
 func New() *Mux {
 	return &Mux{
 		Router:      chi.NewRouter(),
 		namedRoutes: make(map[string]namedRoute),
+		routeNames:  make(map[string]string),
 	}
 }
 
@@ -34,6 +37,7 @@ func (m *Mux) With(middlewares ...func(http.Handler) http.Handler) *Mux {
 		Router:      m.Router.With(middlewares...),
 		prefix:      m.prefix,
 		namedRoutes: m.namedRoutes,
+		routeNames:  m.routeNames,
 	}
 }
 
@@ -42,6 +46,7 @@ func (m *Mux) Group(fn func(r *Mux)) *Mux {
 		Router:      m.Router.With(),
 		prefix:      m.prefix,
 		namedRoutes: m.namedRoutes,
+		routeNames:  m.routeNames,
 	}
 	if fn != nil {
 		fn(mux)
@@ -58,7 +63,6 @@ func (m *Mux) Route(pattern string, fn func(r *Mux)) *Mux {
 	return mux
 }
 
-// TODO allow name here (and prefix it to the nested names)?
 func (m *Mux) Mount(pattern string, h http.Handler) {
 	if mux, ok := h.(*Mux); ok {
 		m.Router.Mount(pattern, mux.Router)
@@ -77,6 +81,7 @@ func (m *Mux) Mount(pattern string, h http.Handler) {
 				rr.replacers[param] = replacer
 			}
 			m.namedRoutes[name] = rr
+			m.routeNames[rr.method+rr.pattern] = name
 		}
 	} else {
 		m.Router.Mount(pattern, h)
@@ -86,97 +91,107 @@ func (m *Mux) Mount(pattern string, h http.Handler) {
 type Builder struct {
 	prefix      namedRoute
 	namedRoutes map[string]namedRoute
+	routeNames  map[string]string
+	method      string
 	pattern     string
 }
 
-func (n Builder) Name(name string) {
+func (b Builder) Name(name string) {
 	if name == "" {
 		return
 	}
 
-	if replacers := compileReplacers(n.pattern); replacers != nil {
+	if replacers := compileReplacers(b.pattern); replacers != nil {
 		r := namedRoute{
-			pattern:   concatPrefix(n.prefix.pattern, n.pattern),
+			method:    b.method,
+			pattern:   concatPrefix(b.prefix.pattern, b.pattern),
 			replacers: replacers,
 		}
-		for param, replacer := range n.prefix.replacers {
+		for param, replacer := range b.prefix.replacers {
 			r.replacers[param] = replacer
 		}
-		n.namedRoutes[name] = r
+		b.namedRoutes[name] = r
+		b.routeNames[b.method+b.pattern] = name
 	}
 }
 
-func (m *Mux) builder(pattern string) Builder {
+func (m *Mux) builder(method, pattern string) Builder {
 	return Builder{
-		prefix:      m.prefix,
 		namedRoutes: m.namedRoutes,
+		routeNames:  m.routeNames,
+		prefix:      m.prefix,
+		method:      method,
 		pattern:     pattern,
 	}
 }
 
 func (m *Mux) Handle(pattern string, h http.Handler) Builder {
 	m.Router.Handle(pattern, h)
-	return m.builder(pattern)
+	return m.builder("", pattern)
 }
 
 func (m *Mux) HandleFunc(pattern string, h http.HandlerFunc) Builder {
 	m.Router.HandleFunc(pattern, h)
-	return m.builder(pattern)
+	return m.builder("", pattern)
 }
 
 func (m *Mux) Method(method, pattern string, h http.Handler) Builder {
 	m.Router.Method(method, pattern, h)
-	return m.builder(pattern)
+	return m.builder(method, pattern)
 }
 
 func (m *Mux) MethodFunc(method, pattern string, h http.HandlerFunc) Builder {
 	m.Router.MethodFunc(method, pattern, h)
-	return m.builder(pattern)
+	return m.builder(method, pattern)
 }
 
 func (m *Mux) Connect(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Connect(pattern, h)
-	return m.builder(pattern)
+	return m.builder("CONNECT", pattern)
 }
 
 func (m *Mux) Delete(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Delete(pattern, h)
-	return m.builder(pattern)
+	return m.builder("DELETE", pattern)
 }
 
 func (m *Mux) Get(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Get(pattern, h)
-	return m.builder(pattern)
+	return m.builder("GET", pattern)
 }
 
 func (m *Mux) Head(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Head(pattern, h)
-	return m.builder(pattern)
+	return m.builder("HEAD", pattern)
 }
 
 func (m *Mux) Options(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Options(pattern, h)
-	return m.builder(pattern)
+	return m.builder("OPTIONS", pattern)
 }
 
 func (m *Mux) Patch(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Patch(pattern, h)
-	return m.builder(pattern)
+	return m.builder("PATCH", pattern)
 }
 
 func (m *Mux) Post(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Post(pattern, h)
-	return m.builder(pattern)
+	return m.builder("POST", pattern)
 }
 
 func (m *Mux) Put(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Put(pattern, h)
-	return m.builder(pattern)
+	return m.builder("PUT", pattern)
 }
 
 func (m *Mux) Trace(pattern string, h http.HandlerFunc) Builder {
 	m.Router.Trace(pattern, h)
-	return m.builder(pattern)
+	return m.builder("TRACE", pattern)
+}
+
+func (m *Mux) RouteName(method, pattern string) string {
+	return m.routeNames[method+pattern]
 }
 
 // TODO check if param value matches regex
